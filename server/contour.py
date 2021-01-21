@@ -107,7 +107,7 @@ def marching_squares(grid_matrix, grid_sign, grid_square, contour_configuration,
     contour_square = []
     ## grid sign to grid square
     for i in range(grid_size - 1):
-        for i in range(grid_size - 1):
+        for j in range(grid_size - 1):
             ## simple loop unrolling
             index_3 = grid_sign[i, j]
             index_2 = grid_sign[i + 1, j]
@@ -123,7 +123,7 @@ def marching_squares(grid_matrix, grid_sign, grid_square, contour_configuration,
     ## linear interpolation
     contours = []
     for (i, j) in contour_square:
-        edge_direction = contour_configuration[grid_square[i, j]]
+        edge_direction = contour_configuration[int(grid_square[i, j])]
         for edge in edge_direction:
             ## unrolling
             edge_start = edge[0]
@@ -143,7 +143,7 @@ def marching_squares(grid_matrix, grid_sign, grid_square, contour_configuration,
             edge_end_coor = coor_p * (1 - alpha) + coor_q * alpha
 
             edge_coor = [edge_start_coor, edge_end_coor]
-            contour.append(edge_coor)
+            contours.append(edge_coor)
 
             
     
