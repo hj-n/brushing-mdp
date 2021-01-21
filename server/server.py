@@ -41,7 +41,9 @@ def checkPath(request, cpath):
     else:
         return True
 
-
+@app.route('/')
+def test():
+    return "test"
 
 @app.route('/init')
 def init():
@@ -190,4 +192,4 @@ def brushing_finish():
 
 
 if __name__ == '__main__':
-    app.run()
+    app.run(host='0.0.0.0')

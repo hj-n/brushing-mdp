@@ -9,13 +9,38 @@ marching_squares: perform marching squares algorithm for final contour computati
 import numpy as np 
 import math
 
+from numba import cuda
 
 
 def generate(current_selection, current_emb, max_emb, min_emb):
 
-    grid_matrix = np.zeros((20, 20))
-    kernel_density(current_selection, current_emb, grid_matrix, max_emb, min_emb)
+    g_size = 20
+    grid_matrix = np.zeros((g_size, g_size))
+    grid_sign = np.zeros((g_size, g_size))
+    grid_square = np.zeros((g_size - 1, g_size - 1))
 
+    ## smallest block dimension : smaller to bigger, 
+    contour_configuration = [
+        [],                                      ## 0
+        [[[2, 0], [1, 0]]],                      ## 1 
+        [[[0, 1], [3, 1]]],                      ## 2
+        [[[2, 0], [3, 1]]],                      ## 3
+        [[[3, 2], [0, 2]]],                      ## 4
+        [[[3, 2], [1, 0]]],                      ## 5
+        [[[0, 1], [0, 2]], [[2, 3], [3, 1]]],    ## 6
+        [[[3, 2], [3, 1]]],                      ## 7
+        [[[1, 3], [2, 3]]],                      ## 8
+        [[[3, 1], [1, 0]], [[2, 0], [2, 3]]],    ## 9
+        [[[0, 1], [2, 3]]],                      ## 10
+        [[[2, 0], [2, 3]]],                      ## 11
+        [[[1, 3], [0, 2]]],                      ## 12
+        [[[1, 3], [1, 0]]],                      ## 13
+        [[[0, 1], [0, 2]]],                      ## 14   
+        [],                                      ## 15
+    ]
+    
+    isovalue = kernel_density(current_selection, current_emb, grid_matrix, max_emb, min_emb)
+    marching_squares(grid_matrix, grid_sign, grid_square, contour_configuration, isovalue)
 
 
 ## current_selection: current selected points which needs to be density-estimated
@@ -58,21 +83,69 @@ def kernel_density(current_selection, current_emb, grid_matrix, max_emb, min_emb
                     dist = abs(ii) + abs(jj)
                     if (dist > value) or (i + ii >= grid_size) or (j + jj >= grid_size):
                         continue 
-                    current_kernel_density = value - dist
+                    current_kernel_density = value - dist * (value / kernel_size)
                     grid_matrix[i + ii, j + jj] += current_kernel_density
     
-    print(grid_matrix)
+    ## currently isovalue : 20% point of the max value of the grid matrix
+    return np.max(grid_matrix) * 0.2
 
+
+
+## marching squares algorithm
+def marching_squares(grid_matrix, grid_sign, grid_square, contour_configuration, isovalue):
+
+    grid_size = grid_matrix.shape[0]
+
+    ## grid matrix to grid sign
+    for i in range(grid_size):
+        for j in range(grid_size):
+            if grid_matrix[i, j] >= isovalue:
+                grid_sign[i, j] = 1
+            else:
+                grid_sign[i, j] = 0
     
-    
+    contour_square = []
+    ## grid sign to grid square
+    for i in range(grid_size - 1):
+        for i in range(grid_size - 1):
+            ## simple loop unrolling
+            index_3 = grid_sign[i, j]
+            index_2 = grid_sign[i + 1, j]
+            index_1 = grid_sign[i, j + 1]
+            index_0 = grid_sign[i + 1, j + 1]
+
+            index_fi = 8 * index_3 + 4 * index_2 + 2 * index_1 + index_0
+            grid_square[i, j] =  index_fi
+            if ( 0 < index_fi < 15):
+                contour_square.append((i, j))
             
 
+    ## linear interpolation
+    contours = []
+    for (i, j) in contour_square:
+        edge_direction = contour_configuration[grid_square[i, j]]
+        for edge in edge_direction:
+            ## unrolling
+            edge_start = edge[0]
+            coor_p = np.array([i + edge_start[0] % 2, j + edge_start[0] // 2])
+            coor_q = np.array([i + edge_start[1] % 2, j + edge_start[1] // 2])
+            s_p = grid_matrix[coor_p[0], coor_p[1]]
+            s_q = grid_matrix[coor_q[0], coor_p[1]]
+            alpha = (isovalue - s_p) / (s_q - s_p)
+            edge_start_coor = coor_p * (1 - alpha) + coor_q * alpha
+            
+            edge_end = edge[0]
+            coor_p = np.array([i + edge_end[0] % 2, j + edge_end[0] // 2])
+            coor_q = np.array([i + edge_end[1] % 2, j + edge_end[1] // 2])
+            s_p = grid_matrix[coor_p[0], coor_p[1]]
+            s_q = grid_matrix[coor_q[0], coor_p[1]]
+            alpha = (isovalue - s_p) / (s_q - s_p)
+            edge_end_coor = coor_p * (1 - alpha) + coor_q * alpha
 
+            edge_coor = [edge_start_coor, edge_end_coor]
+            contour.append(edge_coor)
+
+            
     
 
 
-    
-    pass
-
-def marching_squares():
-    pass
