@@ -8,6 +8,7 @@ marching_squares: perform marching squares algorithm for final contour computati
 
 import numpy as np 
 import math
+import copy
 
 from numba import cuda
 
@@ -40,8 +41,9 @@ def generate(current_selection, current_emb, max_emb, min_emb):
     ]
     
     isovalue = kernel_density(current_selection, current_emb, grid_matrix, max_emb, min_emb)
-    marching_squares(grid_matrix, grid_sign, grid_square, contour_configuration, isovalue)
+    contours = marching_squares(grid_matrix, grid_sign, grid_square, contour_configuration, isovalue)
 
+    return contours
 
 ## current_selection: current selected points which needs to be density-estimated
 ## gird_matrix: stores grid value based on kernel density estimation (should be np array, zero-initialized)
@@ -109,43 +111,161 @@ def marching_squares(grid_matrix, grid_sign, grid_square, contour_configuration,
     for i in range(grid_size - 1):
         for j in range(grid_size - 1):
             ## simple loop unrolling
-            index_3 = grid_sign[i, j]
-            index_2 = grid_sign[i + 1, j]
-            index_1 = grid_sign[i, j + 1]
-            index_0 = grid_sign[i + 1, j + 1]
+            index_0 = grid_sign[i, j]
+            index_1 = grid_sign[i + 1, j]
+            index_2 = grid_sign[i, j + 1]
+            index_3 = grid_sign[i + 1, j + 1]
 
             index_fi = 8 * index_3 + 4 * index_2 + 2 * index_1 + index_0
             grid_square[i, j] =  index_fi
             if ( 0 < index_fi < 15):
                 contour_square.append((i, j))
+    
+    
+
+    print(contour_square)
+    ## Polygon Extraction
+
+    ### mark valid / visited points for fast search
+    grid_mark = np.zeros_like(grid_square)
+
+    edge_directions = []
+    edge_positions = {}
+
+    idx = 0
+    for (i, j) in contour_square:
+        edge_direction = contour_configuration[int(grid_square[i, j])]
+        
+    
+        for single_edge_direction in edge_direction:
+            new_direction = [
+                [
+                    [i + single_edge_direction[0][0]  % 2, j + single_edge_direction[0][0] // 2],
+                    [i + single_edge_direction[0][1]  % 2, j + single_edge_direction[0][1] // 2]
+                ],
+                [
+                    [i + single_edge_direction[1][0]  % 2, j + single_edge_direction[1][0] // 2],
+                    [i + single_edge_direction[1][1]  % 2, j + single_edge_direction[1][1] // 2]
+                ],
+            ]
+
+            grid_mark[i, j] += 1
+            edge_directions.append(new_direction)
             
+            key = str(i) + "_" + str(j)
+            if key in edge_positions:
+                edge_positions[key].append(idx)
+            else:
+                edge_positions[key] = [idx]
+
+            idx += 1
+            
+
+    
+    
+    polygon = copy.deepcopy(edge_directions[0])
+
+    print(edge_positions)
+
+
+    def check_next_point(position_x, position_y, edge_positions, edge_directions, current_end, current_coor, polygon):
+        key = str(position_x) + "_" + str(position_y)
+        is_finished = False
+        for (real_idx, idx) in enumerate(edge_positions[key]):
+            edge = edge_directions[idx]
+            if (edge[0][0][0] ==  current_end[0][0] and edge[0][0][1] ==  current_end[0][1] and 
+                edge[0][1][0] ==  current_end[1][0] and edge[0][1][1] ==  current_end[1][1]):
+                grid_mark[position_x, position_y] = -1 ## mark as visited
+                polygon.append(edge[1])
+                edge_positions[key].pop(real_idx)
+                is_finished = True
+                break
+        return is_finished
+
+    grid_mark[contour_square[0][0], contour_square[0][1]] -= 1 ## mark as visited
+    current_coor = contour_square[0]
+    for i in range(1, len(edge_directions) - 1):  
+        current_end = polygon[-1]
+        
+        print(grid_mark[current_coor[0] - 1, current_coor[1]])
+        if current_coor[0] >= 1 and grid_mark[current_coor[0] - 1, current_coor[1]] > 0: ## can go left
+            is_finished = check_next_point(current_coor[0] - 1, current_coor[1], 
+                                           edge_positions, edge_directions, 
+                                           current_end, current_coor, polygon)
+
+            print("1 START")
+            if (is_finished):
+                current_coor = (current_coor[0] - 1, current_coor[1])
+                print("CHECK1")
+                continue
+        print(grid_mark[current_coor[0] + 1, current_coor[1]])
+        if current_coor[0] <= (grid_size - 3) and grid_mark[current_coor[0] + 1, current_coor[1]] > 0: ## can go right
+            is_finished = check_next_point(current_coor[0] + 1, current_coor[1], 
+                                           edge_positions, edge_directions, 
+                                           current_end, current_coor, polygon)
+            print("2 START")
+            if (is_finished):
+                current_coor = (current_coor[0] + 1, current_coor[1])
+                print("CHECK2")
+                continue
+        print(grid_mark[current_coor[0], current_coor[1] - 1])
+        if current_coor[1] >= 1 and grid_mark[current_coor[0], current_coor[1] - 1] > 0: ## can go up
+            is_finished = check_next_point(current_coor[0] , current_coor[1] - 1, 
+                                           edge_positions, edge_directions, 
+                                           current_end, current_coor, polygon)
+            print("3 START")
+            if (is_finished):
+                current_coor = (current_coor[0], current_coor[1] - 1)
+                print("CHECK3")
+                continue
+        print(grid_mark[current_coor[0], current_coor[1] + 1])
+        if current_coor[1] <= (grid_size - 3) and grid_mark[current_coor[0], current_coor[1] + 1] > 0: ## can go down
+            is_finished = check_next_point(current_coor[0], current_coor[1] + 1, 
+                                           edge_positions, edge_directions, 
+                                           current_end, current_coor, polygon)
+            print("4 START")
+            if (is_finished):
+                current_coor = (current_coor[0], current_coor[1] + 1)
+                print("CHECK4")
+                continue
+        
+
+    
+    print(len(edge_directions))
+    for i in edge_directions:
+        print(i)
+    print(edge_positions)
+    print("++++++++++++++++++++++")
+    print(len(polygon))
+    print(polygon)            
+    print("++++++++++++++++++++++")
 
     ## linear interpolation
     contours = []
-    for (i, j) in contour_square:
-        edge_direction = contour_configuration[int(grid_square[i, j])]
-        for edge in edge_direction:
-            ## unrolling
-            edge_start = edge[0]
-            coor_p = np.array([i + edge_start[0] % 2, j + edge_start[0] // 2])
-            coor_q = np.array([i + edge_start[1] % 2, j + edge_start[1] // 2])
-            s_p = grid_matrix[coor_p[0], coor_p[1]]
-            s_q = grid_matrix[coor_q[0], coor_p[1]]
-            alpha = (isovalue - s_p) / (s_q - s_p)
-            edge_start_coor = coor_p * (1 - alpha) + coor_q * alpha
+    # for (i, j) in contour_square:
+    #     edge_direction = contour_configuration[int(grid_square[i, j])]
+    #     for edge in edge_direction:
+    #         ## unrolling
+    #         edge_start = edge[0]
+    #         coor_p = np.array([i + edge_start[0] % 2, j + edge_start[0] // 2])
+    #         coor_q = np.array([i + edge_start[1] % 2, j + edge_start[1] // 2])
+    #         s_p = grid_matrix[coor_p[0], coor_p[1]]
+    #         s_q = grid_matrix[coor_q[0], coor_q[1]]
+    #         alpha = (isovalue - s_p) / (s_q - s_p)
+    #         edge_start_coor = coor_p * (1 - alpha) + coor_q * alpha
             
-            edge_end = edge[0]
-            coor_p = np.array([i + edge_end[0] % 2, j + edge_end[0] // 2])
-            coor_q = np.array([i + edge_end[1] % 2, j + edge_end[1] // 2])
-            s_p = grid_matrix[coor_p[0], coor_p[1]]
-            s_q = grid_matrix[coor_q[0], coor_p[1]]
-            alpha = (isovalue - s_p) / (s_q - s_p)
-            edge_end_coor = coor_p * (1 - alpha) + coor_q * alpha
+    #         edge_end = edge[1]
+    #         coor_p = np.array([i + edge_end[0] % 2, j + edge_end[0] // 2])
+    #         coor_q = np.array([i + edge_end[1] % 2, j + edge_end[1] // 2])
+    #         s_p = grid_matrix[coor_p[0], coor_p[1]]
+    #         s_q = grid_matrix[coor_q[0], coor_q[1]]
+    #         alpha = (isovalue - s_p) / (s_q - s_p)
+    #         edge_end_coor = coor_p * (1 - alpha) + coor_q * alpha
 
-            edge_coor = [edge_start_coor, edge_end_coor]
-            contours.append(edge_coor)
+    #         edge_coor = [edge_start_coor.tolist(), edge_end_coor.tolist()]
+    #         contours.append(edge_coor)
 
-            
+    return contours
     
 
 

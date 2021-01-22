@@ -173,10 +173,12 @@ def brushing_status():
         for idx in CURRENT_SELECTION:
             selection_to_list[idx] = 1
         
-        Contour.generate(CURRENT_SELECTION, CURRENT_EMB, MAX_EMB, MIN_EMB)
+        contours = Contour.generate(CURRENT_SELECTION, CURRENT_EMB, MAX_EMB, MIN_EMB)
 
+        print(contours)
         return jsonify({
             "changed": True,
+            "contour": contours,
             "selection": selection_to_list
         })
     else:
