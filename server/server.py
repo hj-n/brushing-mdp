@@ -175,7 +175,6 @@ def brushing_status():
         
         contours = Contour.generate(CURRENT_SELECTION, CURRENT_EMB, MAX_EMB, MIN_EMB)
 
-        print(contours)
         return jsonify({
             "changed": True,
             "contour": contours,
