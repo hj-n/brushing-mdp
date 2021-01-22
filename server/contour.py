@@ -15,7 +15,7 @@ from numba import cuda
 
 def generate(current_selection, current_emb, max_emb, min_emb):
 
-    g_size = 20
+    g_size = 25
     grid_matrix = np.zeros((g_size, g_size))
     grid_sign = np.zeros((g_size, g_size))
     grid_square = np.zeros((g_size - 1, g_size - 1))

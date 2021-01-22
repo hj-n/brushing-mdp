@@ -177,7 +177,7 @@ def brushing_status():
 
         return jsonify({
             "changed": True,
-            "contour": contours,
+            "polygon": contours,
             "selection": selection_to_list
         })
     else:
