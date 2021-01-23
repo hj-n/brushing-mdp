@@ -125,6 +125,7 @@ def pointLens():
 
     ## naive implementation for the filtering (should be parallelized)
     modified_emb = []
+    from_outside_idx = []
     center_coor = EMB[int(index)]
     for i, coor in enumerate(EMB):
         if i == int(index):
@@ -137,6 +138,8 @@ def pointLens():
             if (list_similarity[i] / max_similarity) < 0.5:
                 modified_emb.append(coor)
                 continue
+            else:
+                from_outside_idx.append(i)
 
     
         direction = np.array(coor) - np.array(center_coor)
@@ -147,7 +150,10 @@ def pointLens():
         modified_emb.append(new_coor.tolist())
 
     CURRENT_EMB = modified_emb
-    return jsonify(modified_emb)
+    return jsonify({
+        "modified_emb" : modified_emb,
+        "from_outside_idx" : from_outside_idx
+    })
 
 @app.route('/brushing')
 def brushing_status():
